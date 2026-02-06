@@ -1,0 +1,31 @@
+---
+layout: default
+---
+
+<div class="guide-detail">
+  <nav class="back-nav">
+    <a href="{{ '/' | relative_url }}" class="back-link">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="19" y1="12" x2="5" y2="12"></line>
+        <polyline points="12 19 5 12 12 5"></polyline>
+      </svg>
+      <span>BACK</span>
+    </a>
+  </nav>
+
+  <header class="guide-detail-header">
+    <h1>{{ page.title }}</h1>
+    <div class="guide-meta">
+      {% if page.author %}
+      <span>{{ page.author }}</span>
+      {% endif %}
+      {% if page.date %}
+      <span>{{ page.date | date: "%B %Y" }}</span>
+      {% endif %}
+    </div>
+  </header>
+
+  <div class="artifact-container">
+    {{ content }}
+  </div>
+</div>

@@ -1,0 +1,53 @@
+---
+layout: default
+---
+
+<div class="guides-container">
+  <header class="guides-header">
+    <h1>AI<span class="accent">_</span>GUIDES</h1>
+    <p class="tagline">No bullshit. Just what works.</p>
+  </header>
+
+  <div class="guides-grid">
+    {% for guide in site.guides %}
+    <article class="guide-card" data-available="true">
+      <div class="guide-icon">{{ guide.icon }}</div>
+      <h2>{{ guide.title }}</h2>
+      <p>{{ guide.description }}</p>
+      <a href="{{ guide.url | relative_url }}" class="guide-link">
+        <span>OPEN</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+          <polyline points="12 5 19 12 12 19"></polyline>
+        </svg>
+      </a>
+    </article>
+    {% endfor %}
+
+    <!-- Placeholder cards -->
+    <article class="guide-card" data-available="false">
+      <div class="guide-icon">🤖</div>
+      <h2>Claude Guide</h2>
+      <p>Advanced prompt engineering and system design patterns.</p>
+      <div class="coming-soon">COMING SOON</div>
+    </article>
+
+    <article class="guide-card" data-available="false">
+      <div class="guide-icon">💬</div>
+      <h2>ChatGPT Guide</h2>
+      <p>Custom GPTs, plugins, and enterprise deployment.</p>
+      <div class="coming-soon">COMING SOON</div>
+    </article>
+
+    <article class="guide-card" data-available="false">
+      <div class="guide-icon">🔍</div>
+      <h2>Perplexity Guide</h2>
+      <p>Research workflows and source verification strategies.</p>
+      <div class="coming-soon">COMING SOON</div>
+    </article>
+  </div>
+
+  <footer class="guides-footer">
+    <p>By <a href="https://human.org" target="_blank">Human Agency</a> · <a href="mailto:ai@human.org">ai@human.org</a></p>
+  </footer>
+</div>

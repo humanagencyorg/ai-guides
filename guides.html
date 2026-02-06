@@ -1,0 +1,37 @@
+---
+layout: default
+title: "Available Guides"
+permalink: /guides/
+---
+
+<div class="guides-page">
+  <h1>AI Guides Library</h1>
+  <p class="page-intro">Interactive guides for safe and effective AI tool usage. Each guide is an embedded Claude artifact with full interactivity.</p>
+
+  <div class="guides-grid">
+    {% for guide in site.guides %}
+    <article class="guide-card">
+      <div class="guide-icon">{{ guide.icon }}</div>
+      <h2 class="guide-title">{{ guide.title }}</h2>
+      <p class="guide-description">{{ guide.description }}</p>
+      <div class="guide-meta">
+        <span class="guide-date">{{ guide.date | date: "%B %d, %Y" }}</span>
+        {% if guide.author %}
+        <span class="guide-author">by {{ guide.author }}</span>
+        {% endif %}
+      </div>
+      <a href="{{ guide.url | relative_url }}" class="guide-link">Open Interactive Guide →</a>
+    </article>
+    {% endfor %}
+
+    <!-- Coming Soon Card -->
+    <article class="guide-card coming-soon">
+      <div class="guide-icon">🔮</div>
+      <h2 class="guide-title">More Guides Coming Soon</h2>
+      <p class="guide-description">We're actively working on guides for Claude, ChatGPT, Perplexity, and other AI tools.</p>
+      <div class="guide-meta">
+        <span class="guide-status">In Development</span>
+      </div>
+    </article>
+  </div>
+</div>

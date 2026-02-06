@@ -1,0 +1,35 @@
+# Jekyll configuration for AI Guides Site
+title: "AI GUIDES"
+description: "No bullshit guides for AI tools"
+author: "Human Agency"
+email: "ai@human.org"
+baseurl: "" # Set this to your repo name if using custom domain
+url: "" # Your GitHub Pages URL
+
+# Build settings
+markdown: kramdown
+
+# Collections
+collections:
+  guides:
+    output: true
+    permalink: /guides/:name/
+
+# Defaults
+defaults:
+  - scope:
+      path: ""
+      type: "guides"
+    values:
+      layout: "artifact"
+  - scope:
+      path: ""
+    values:
+      layout: "default"
+
+# Exclude files
+exclude:
+  - README.md
+  - Gemfile
+  - Gemfile.lock
+  - .gitignore

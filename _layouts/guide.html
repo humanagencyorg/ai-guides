@@ -1,0 +1,65 @@
+---
+layout: default
+---
+
+<div class="guide-container">
+  <!-- Desktop Sidebar -->
+  <aside class="sidebar desktop-sidebar">
+    <nav class="guide-nav">
+      {% for section in page.sections %}
+      <a href="#{{ section.id }}" class="nav-item" data-section="{{ section.id }}">
+        <span class="nav-icon">{{ section.icon }}</span>
+        <span class="nav-title">{{ section.title }}</span>
+      </a>
+      {% endfor %}
+    </nav>
+    
+    <div class="contact-block">
+      <p>Got a suggestion, something to flag, or an idea you want to implement?</p>
+      <p>Contact <a href="mailto:{{ site.email }}">{{ site.email }}</a>.</p>
+    </div>
+  </aside>
+
+  <!-- Mobile Sidebar -->
+  <aside class="sidebar mobile-sidebar" id="mobile-sidebar">
+    <nav class="guide-nav">
+      {% for section in page.sections %}
+      <a href="#{{ section.id }}" class="nav-item mobile-nav-item" data-section="{{ section.id }}">
+        <span class="nav-icon">{{ section.icon }}</span>
+        <span class="nav-title">{{ section.title }}</span>
+      </a>
+      {% endfor %}
+    </nav>
+    
+    <div class="contact-block">
+      <p>Got a suggestion, something to flag, or an idea you want to implement?</p>
+      <p>Contact <a href="mailto:{{ site.email }}">{{ site.email }}</a>.</p>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="guide-content">
+    <header class="guide-header">
+      <h1>{{ page.guide_title }}</h1>
+      {% if page.sources %}
+      <div class="sources">
+        <span class="sources-label">Research & sources:</span>
+        {% for source in page.sources %}
+          {% if forloop.first == false %}<span class="dot">·</span>{% endif %}
+          <a href="{{ source.url }}" target="_blank" rel="noopener noreferrer">{{ source.name }}</a>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </header>
+
+    <div class="content-sections">
+      {{ content }}
+    </div>
+  </main>
+
+  <!-- Floating copy button -->
+  <button class="copy-button" id="copy-button" data-guide-title="{{ page.title }}" data-guide-content="{{ page.title | escape }}">
+    <span class="copy-icon"><</></span>
+    <span class="copy-text">Copy for agent</span>
+  </button>
+</div>
