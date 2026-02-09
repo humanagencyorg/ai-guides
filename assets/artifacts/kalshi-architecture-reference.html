@@ -1,0 +1,2395 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kalshi Arbitrage on OpenClaw — Implementation Reference</title>
+    <meta property="og:title" content="Kalshi Arbitrage on OpenClaw — Implementation Reference">
+    <meta property="og:description" content="A reference architecture for building an agent-native, real-time arbitrage detection system on the OpenClaw framework.">
+    <meta property="og:image" content="https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png">
+    <meta property="og:type" content="article">
+    <meta name="twitter:card" content="summary">
+    <style>
+        /* ── Reset & base ────────────────────────────────────── */
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        :root {
+            --bg: #0b0e14;
+            --surface: #111720;
+            --surface-2: #181f2c;
+            --border: #232d3f;
+            --text: #c8d1dc;
+            --text-muted: #6b7a90;
+            --heading: #e8edf4;
+            --accent: #47e0a0;
+            --accent-dim: rgba(71, 224, 160, .12);
+            --accent-2: #5ea3f8;
+            --accent-2-dim: rgba(94, 163, 248, .10);
+            --red: #f87171;
+            --red-dim: rgba(248, 113, 113, .10);
+            --amber: #fbbf24;
+            --amber-dim: rgba(251, 191, 36, .10);
+            --purple: #a78bfa;
+            --purple-dim: rgba(167, 139, 250, .10);
+            --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            --mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', Menlo, monospace;
+            --radius: 12px;
+            --transition: .28s cubic-bezier(.4, 0, .2, 1);
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: var(--font);
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.72;
+            font-size: 15.5px;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        a {
+            color: var(--accent-2);
+            text-decoration: none;
+            transition: color var(--transition);
+        }
+
+        a:hover {
+            color: var(--accent);
+        }
+
+        ::selection {
+            background: var(--accent-dim);
+            color: var(--accent);
+        }
+
+        img {
+            max-width: 100%;
+        }
+
+        /* ── Typography ──────────────────────────────────────── */
+        h1,
+        h2,
+        h3,
+        h4 {
+            color: var(--heading);
+            font-weight: 700;
+            letter-spacing: -.02em;
+        }
+
+        h1 {
+            font-size: clamp(2rem, 4vw, 3rem);
+            line-height: 1.15;
+        }
+
+        h2 {
+            font-size: clamp(1.4rem, 2.6vw, 1.85rem);
+            line-height: 1.25;
+            margin-top: 3.5rem;
+        }
+
+        h3 {
+            font-size: 1.15rem;
+            margin-top: 2rem;
+        }
+
+        p,
+        li {
+            max-width: 72ch;
+        }
+
+        /* ── Layout ──────────────────────────────────────────── */
+        .wrapper {
+            max-width: 1140px;
+            margin: 0 auto;
+            padding: 0 2rem;
+        }
+
+        section {
+            padding: 4rem 0;
+        }
+
+        section+section {
+            border-top: 1px solid var(--border);
+        }
+
+        /* ── Hero ─────────────────────────────────────────────── */
+        .hero {
+            min-height: 60vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+            padding: 6rem 0 4rem;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background:
+                radial-gradient(ellipse 70% 50% at 20% 40%, rgba(71, 224, 160, .06) 0%, transparent 70%),
+                radial-gradient(ellipse 50% 60% at 80% 30%, rgba(94, 163, 248, .05) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .hero .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: .5rem;
+            font-size: .8rem;
+            text-transform: uppercase;
+            letter-spacing: .08em;
+            font-weight: 600;
+            color: var(--accent);
+            background: var(--accent-dim);
+            border: 1px solid rgba(71, 224, 160, .18);
+            padding: .35rem 1rem;
+            border-radius: 100px;
+            margin-bottom: 1.5rem;
+            animation: fadeUp .6s ease both;
+        }
+
+        .hero h1 {
+            animation: fadeUp .6s .1s ease both;
+        }
+
+        .hero .subtitle {
+            font-size: 1.15rem;
+            color: var(--text-muted);
+            max-width: 60ch;
+            margin-top: 1rem;
+            animation: fadeUp .6s .2s ease both;
+        }
+
+        .hero .meta-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 2rem;
+            margin-top: 2.5rem;
+            animation: fadeUp .6s .3s ease both;
+        }
+
+        .hero .meta-item {
+            font-size: .82rem;
+            color: var(--text-muted);
+        }
+
+        .hero .meta-item strong {
+            display: block;
+            color: var(--heading);
+            font-size: 1.05rem;
+            margin-bottom: .15rem;
+        }
+
+        /* ── Sticky nav bar ────────────────────────────────── */
+        .toc-bar {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: rgba(13, 17, 23, .88);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border);
+            padding: 0;
+            transition: box-shadow .3s ease;
+        }
+
+        .toc-bar.scrolled {
+            box-shadow: 0 2px 20px rgba(0, 0, 0, .4);
+        }
+
+        .toc-bar nav {
+            max-width: var(--max-w);
+            margin: 0 auto;
+            padding: 0 2rem;
+            display: flex;
+            align-items: center;
+            gap: 0;
+            overflow-x: auto;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+
+        .toc-bar .author-link {
+            margin-left: auto;
+            flex-shrink: 0;
+            font-size: .78rem;
+            color: var(--text-muted);
+            white-space: nowrap;
+            padding: .7rem .85rem;
+            border-bottom: none;
+        }
+
+        .toc-bar .author-link span {
+            color: var(--accent-2);
+            transition: color var(--transition);
+        }
+
+        .toc-bar .author-link:hover span {
+            color: var(--accent);
+        }
+
+        .toc-bar nav::-webkit-scrollbar {
+            display: none;
+        }
+
+        .toc-bar a {
+            display: flex;
+            align-items: center;
+            gap: .4rem;
+            padding: .7rem .85rem;
+            font-size: .78rem;
+            color: var(--text-muted);
+            white-space: nowrap;
+            border-bottom: 2px solid transparent;
+            transition: color .2s ease, border-color .2s ease;
+            text-decoration: none;
+        }
+
+        .toc-bar a:hover {
+            color: var(--text);
+        }
+
+        .toc-bar a.active {
+            color: var(--accent);
+            border-bottom-color: var(--accent);
+        }
+
+        .toc-bar .num {
+            font-size: .68rem;
+            font-weight: 600;
+            font-family: var(--mono);
+            color: var(--accent);
+            opacity: .6;
+        }
+
+        .toc-bar a.active .num {
+            opacity: 1;
+        }
+
+        /* push main content below sticky bar */
+        main .wrapper {
+            padding-top: .5rem;
+        }
+
+        /* ── Cards ───────────────────────────────────────────── */
+        .card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1.25rem;
+            margin-top: 1.5rem;
+        }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 1.5rem;
+            transition: border-color var(--transition), box-shadow var(--transition), transform var(--transition);
+        }
+
+        .card:hover {
+            border-color: rgba(71, 224, 160, .25);
+            box-shadow: 0 0 30px rgba(71, 224, 160, .04);
+            transform: translateY(-2px);
+        }
+
+        .card .icon {
+            font-size: 1.6rem;
+            margin-bottom: .6rem;
+            display: block;
+        }
+
+        .card h4 {
+            font-size: 1rem;
+            margin-bottom: .4rem;
+        }
+
+        .card p {
+            font-size: .88rem;
+            color: var(--text-muted);
+        }
+
+        /* ── Flow diagrams ───────────────────────────────────── */
+        .flow-diagram {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 2rem;
+            margin: 1.5rem 0;
+            overflow-x: auto;
+            font-family: var(--mono);
+            font-size: .82rem;
+            line-height: 1.65;
+            color: var(--text);
+            white-space: pre;
+        }
+
+        .flow-diagram .hl-green {
+            color: var(--accent);
+        }
+
+        .flow-diagram .hl-blue {
+            color: var(--accent-2);
+        }
+
+        .flow-diagram .hl-purple {
+            color: var(--purple);
+        }
+
+        .flow-diagram .hl-red {
+            color: var(--red);
+        }
+
+        .flow-diagram .hl-amber {
+            color: var(--amber);
+        }
+
+        .flow-diagram .hl-muted {
+            color: var(--text-muted);
+        }
+
+        /* ── Tables ──────────────────────────────────────────── */
+        .table-wrap {
+            overflow-x: auto;
+            margin: 1.5rem 0;
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: .88rem;
+        }
+
+        thead {
+            background: var(--surface-2);
+        }
+
+        th {
+            text-align: left;
+            padding: .85rem 1.2rem;
+            font-weight: 600;
+            color: var(--heading);
+            font-size: .78rem;
+            text-transform: uppercase;
+            letter-spacing: .06em;
+            border-bottom: 1px solid var(--border);
+        }
+
+        td {
+            padding: .75rem 1.2rem;
+            border-bottom: 1px solid var(--border);
+            vertical-align: top;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr:hover td {
+            background: rgba(71, 224, 160, .02);
+        }
+
+        /* ── Tags / Badges ───────────────────────────────────── */
+        .tag {
+            display: inline-flex;
+            align-items: center;
+            font-size: .72rem;
+            font-weight: 600;
+            padding: .2rem .65rem;
+            border-radius: 100px;
+            letter-spacing: .03em;
+        }
+
+        .tag-green {
+            background: var(--accent-dim);
+            color: var(--accent);
+            border: 1px solid rgba(71, 224, 160, .2);
+        }
+
+        .tag-blue {
+            background: var(--accent-2-dim);
+            color: var(--accent-2);
+            border: 1px solid rgba(94, 163, 248, .2);
+        }
+
+        .tag-amber {
+            background: var(--amber-dim);
+            color: var(--amber);
+            border: 1px solid rgba(251, 191, 36, .2);
+        }
+
+        .tag-red {
+            background: var(--red-dim);
+            color: var(--red);
+            border: 1px solid rgba(248, 113, 113, .2);
+        }
+
+        .tag-purple {
+            background: var(--purple-dim);
+            color: var(--purple);
+            border: 1px solid rgba(167, 139, 250, .2);
+        }
+
+        /* ── Code blocks ─────────────────────────────────────── */
+        pre,
+        code {
+            font-family: var(--mono);
+        }
+
+        code {
+            background: var(--surface-2);
+            padding: .15rem .45rem;
+            border-radius: 5px;
+            font-size: .84em;
+            color: var(--accent);
+        }
+
+        pre {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 1.4rem 1.6rem;
+            overflow-x: auto;
+            font-size: .82rem;
+            line-height: 1.7;
+            margin: 1rem 0;
+        }
+
+        pre code {
+            background: none;
+            padding: 0;
+            color: var(--text);
+        }
+
+        /* ── Callouts ────────────────────────────────────────── */
+        .callout {
+            border-radius: var(--radius);
+            padding: 1.25rem 1.5rem;
+            margin: 1.5rem 0;
+            font-size: .9rem;
+            display: flex;
+            gap: 1rem;
+            align-items: flex-start;
+        }
+
+        .callout .callout-icon {
+            font-size: 1.3rem;
+            flex-shrink: 0;
+            margin-top: .1rem;
+        }
+
+        .callout-warn {
+            background: var(--amber-dim);
+            border: 1px solid rgba(251, 191, 36, .18);
+        }
+
+        .callout-info {
+            background: var(--accent-2-dim);
+            border: 1px solid rgba(94, 163, 248, .18);
+        }
+
+        .callout-danger {
+            background: var(--red-dim);
+            border: 1px solid rgba(248, 113, 113, .18);
+        }
+
+        .callout-tip {
+            background: var(--accent-dim);
+            border: 1px solid rgba(71, 224, 160, .18);
+        }
+
+        /* ── Pill nav (horizontal list) ──────────────────────── */
+        .pill-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: .5rem;
+            list-style: none;
+            margin: 1rem 0;
+        }
+
+        .pill-list li {
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: 100px;
+            padding: .35rem 1rem;
+            font-size: .82rem;
+            color: var(--text);
+            transition: border-color var(--transition);
+        }
+
+        .pill-list li:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        /* ── Timeline ────────────────────────────────────────── */
+        .timeline {
+            position: relative;
+            padding-left: 2.5rem;
+            margin: 2rem 0;
+        }
+
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: .65rem;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: var(--border);
+        }
+
+        .timeline-item {
+            position: relative;
+            padding-bottom: 2rem;
+        }
+
+        .timeline-item:last-child {
+            padding-bottom: 0;
+        }
+
+        .timeline-dot {
+            position: absolute;
+            left: -2.5rem;
+            top: .3rem;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            border: 3px solid var(--accent);
+            background: var(--bg);
+            z-index: 1;
+        }
+
+        .timeline-dot.done {
+            background: var(--accent);
+        }
+
+        .timeline-dot.pending {
+            border-color: var(--text-muted);
+        }
+
+        .timeline-item h4 {
+            font-size: .95rem;
+        }
+
+        .timeline-item p {
+            font-size: .85rem;
+            color: var(--text-muted);
+            margin-top: .25rem;
+        }
+
+        /* ── Stat boxes ──────────────────────────────────────── */
+        .stat-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 1rem;
+            margin: 1.5rem 0;
+        }
+
+        .stat {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 1.2rem;
+            text-align: center;
+        }
+
+        .stat .val {
+            font-size: 1.6rem;
+            font-weight: 700;
+            color: var(--accent);
+            font-family: var(--mono);
+        }
+
+        .stat .lbl {
+            font-size: .75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: .06em;
+            margin-top: .3rem;
+        }
+
+        /* ── Risk trifecta rows ────────────────────────────── */
+        .trifecta-grid {
+            display: flex;
+            flex-direction: column;
+            gap: .75rem;
+            margin-top: 1.25rem;
+        }
+
+        .trifecta-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            overflow: hidden;
+            display: flex;
+            flex-direction: row;
+            align-items: stretch;
+        }
+
+        .trifecta-card .trifecta-label {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 180px;
+            min-width: 180px;
+            padding: .75rem 1rem;
+            font-size: .72rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .08em;
+            text-align: center;
+        }
+
+        .trifecta-card.high .trifecta-label {
+            background: var(--red-dim);
+            color: var(--red);
+            border-right: 2px solid rgba(248, 113, 113, .35);
+        }
+
+        .trifecta-card.medium .trifecta-label {
+            background: var(--amber-dim);
+            color: var(--amber);
+            border-right: 2px solid rgba(251, 191, 36, .35);
+        }
+
+        .trifecta-card.low .trifecta-label {
+            background: var(--accent-dim);
+            color: var(--accent);
+            border-right: 2px solid rgba(71, 224, 160, .35);
+        }
+
+        .trifecta-card .trifecta-body {
+            padding: 1rem 1.25rem;
+            font-size: .86rem;
+            flex: 1;
+        }
+
+        .trifecta-card .trifecta-body strong {
+            color: var(--heading);
+        }
+
+        @media (max-width: 600px) {
+            .trifecta-card {
+                flex-direction: column;
+            }
+
+            .trifecta-card .trifecta-label {
+                width: 100%;
+                min-width: unset;
+                border-right: none;
+                border-bottom: 2px solid currentColor;
+            }
+        }
+
+        /* ── Animated separator ──────────────────────────────── */
+        .sep {
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--accent), transparent);
+            margin: 3rem 0;
+            opacity: .25;
+        }
+
+        /* ── Scroll-triggered reveal ─────────────────────────── */
+        .reveal {
+            opacity: 0;
+            transform: translateY(24px);
+            transition: opacity .6s ease, transform .6s ease;
+        }
+
+        .reveal.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* ── Keyframes ───────────────────────────────────────── */
+        @keyframes fadeUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes pulse-border {
+
+            0%,
+            100% {
+                border-color: rgba(71, 224, 160, .15);
+            }
+
+            50% {
+                border-color: rgba(71, 224, 160, .4);
+            }
+        }
+
+        /* ── Process-step horizontal ─────────────────────────── */
+        .process-steps {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 0;
+            margin: 2rem 0;
+            position: relative;
+        }
+
+        .process-step {
+            text-align: center;
+            padding: 1.5rem 1rem;
+            position: relative;
+        }
+
+        .process-step::after {
+            content: '→';
+            position: absolute;
+            right: -8px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--accent);
+            font-size: 1.2rem;
+            font-weight: 700;
+        }
+
+        .process-step:last-child::after {
+            content: '';
+        }
+
+        .step-num {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: var(--accent-dim);
+            border: 2px solid var(--accent);
+            color: var(--accent);
+            font-weight: 700;
+            font-family: var(--mono);
+            font-size: .85rem;
+            margin-bottom: .6rem;
+        }
+
+        .process-step h4 {
+            font-size: .88rem;
+            margin-bottom: .25rem;
+        }
+
+        .process-step p {
+            font-size: .78rem;
+            color: var(--text-muted);
+        }
+
+        /* ── Two-col layout ──────────────────────────────────── */
+        .two-col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            margin: 1.5rem 0;
+        }
+
+        @media (max-width: 700px) {
+            .two-col {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* ── Footer ──────────────────────────────────────────── */
+        footer {
+            text-align: center;
+            padding: 3rem 0;
+            font-size: .8rem;
+            color: var(--text-muted);
+            border-top: 1px solid var(--border);
+        }
+
+        /* ── Scrollbar ───────────────────────────────────────── */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--text-muted);
+        }
+
+        /* ── Print ───────────────────────────────────────────── */
+        @media print {
+            body {
+                background: #fff;
+                color: #111;
+            }
+
+            .hero::before {
+                display: none;
+            }
+
+            .card,
+            .flow-diagram,
+            pre,
+            .callout,
+            .stat,
+            .trifecta-card {
+                border-color: #ccc;
+            }
+        }
+
+        /* ── Mobile-Only Responsive ─────────────────────────── */
+        .mobile-only {
+            display: none;
+        }
+
+        @media (max-width: 768px) {
+            .mobile-only {
+                display: block !important;
+            }
+
+            .desktop-only {
+                display: none !important;
+            }
+
+            /* Tables → Stacked Cards */
+            .table-wrap {
+                border: none;
+                overflow-x: visible;
+            }
+
+            table thead {
+                display: none;
+            }
+
+            table,
+            table tbody,
+            table tr,
+            table td {
+                display: block;
+                width: 100%;
+            }
+
+            table tr {
+                margin-bottom: 0.75rem;
+                border: 1px solid var(--border);
+                border-radius: var(--radius);
+                background: var(--surface);
+                padding: 0.75rem 0;
+            }
+
+            table tr:last-child {
+                margin-bottom: 0;
+            }
+
+            table tr:hover td {
+                background: transparent;
+            }
+
+            table td {
+                padding: 0.35rem 1rem;
+                border-bottom: none;
+            }
+
+            table td::before {
+                content: attr(data-label);
+                display: block;
+                font-weight: 600;
+                font-size: 0.7rem;
+                text-transform: uppercase;
+                letter-spacing: 0.06em;
+                color: var(--text-muted);
+                margin-bottom: 0.1rem;
+            }
+
+            table td:first-child {
+                padding-top: 0.75rem;
+                padding-bottom: 0.5rem;
+                font-size: 1rem;
+                font-weight: 700;
+                color: var(--heading);
+                border-bottom: 1px solid var(--border);
+                margin: 0 1rem 0.25rem;
+                padding-left: 0;
+                padding-right: 0;
+                width: auto;
+            }
+
+            table td:first-child::before {
+                display: none;
+            }
+
+            /* Flow diagrams: wrap */
+            .flow-diagram {
+                white-space: pre-wrap;
+                word-break: break-word;
+                font-size: 0.68rem;
+                padding: 1rem 0.75rem;
+                overflow-x: hidden;
+            }
+
+            /* Pre blocks: wrap */
+            pre {
+                white-space: pre-wrap;
+                word-break: break-word;
+                font-size: 0.72rem;
+                padding: 1rem;
+            }
+
+            /* Security checklist: single column */
+            #security-checklist {
+                grid-template-columns: 1fr !important;
+            }
+
+            /* Process steps: vertical arrows */
+            .process-steps {
+                grid-template-columns: 1fr !important;
+                gap: 0;
+            }
+
+            .process-step {
+                padding-bottom: 2.5rem;
+            }
+
+            .process-step::after {
+                content: '\2193' !important;
+                right: auto !important;
+                left: 50%;
+                top: auto !important;
+                bottom: 0.5rem;
+                transform: translateX(-50%) !important;
+                font-size: 1.4rem;
+            }
+
+            .process-step:last-child {
+                padding-bottom: 1.5rem;
+            }
+
+            .process-step:last-child::after {
+                content: '' !important;
+            }
+
+            /* General mobile spacing */
+            .wrapper {
+                padding: 0 1rem;
+            }
+
+            section {
+                padding: 2.5rem 0;
+            }
+
+            .hero {
+                padding: 3rem 0 2rem;
+                min-height: auto;
+            }
+        }
+    </style>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
+</head>
+
+<body>
+
+    <!-- ═══════════════════════════════════════════════════════
+     STICKY NAV
+     ═══════════════════════════════════════════════════════ -->
+    <div class="toc-bar" id="toc-bar">
+        <nav>
+            <a href="#intro"><span class="num">00</span> Intro</a>
+            <a href="#use-case"><span class="num">01</span> Use Case</a>
+            <a href="#framework"><span class="num">02</span> Framework</a>
+            <a href="#architecture"><span class="num">03</span> Architecture</a>
+            <a href="#data-pipeline"><span class="num">04</span> Pipeline</a>
+            <a href="#security"><span class="num">05</span> Security</a>
+            <a href="#skills"><span class="num">06</span> Skills</a>
+            <a href="#ops"><span class="num">07</span> Operations</a>
+            <a href="#phases"><span class="num">08</span> Phases</a>
+            <a href="#apply"><span class="num">09</span> Apply</a>
+            <a href="https://github.com/madecero" target="_blank" class="author-link desktop-only">Author: <span>Michael DeCero</span></a>
+        </nav>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════
+     HERO
+     ═══════════════════════════════════════════════════════ -->
+    <header id="intro" class="hero">
+        <div class="wrapper">
+            <a href="https://github.com/madecero" target="_blank" class="hero-author mobile-only" style="display:none;font-size:.78rem;color:var(--text-muted);text-decoration:none;margin-bottom:.75rem;">Author: <span style="color:var(--accent-2);">Michael DeCero</span></a>
+            <span class="badge">📈 Implementation Reference</span>
+            <h1>Kalshi Prediction Market Arbitrage<br>on OpenClaw</h1>
+            <p class="subtitle">
+                A reference architecture for building an agent-native, real-time arbitrage detection system
+                on the OpenClaw framework — from dedicated infrastructure to live WebSocket scanning on the
+                first CFTC-regulated prediction market.
+            </p>
+            <div class="meta-row">
+                <div class="meta-item"><strong>Framework</strong>OpenClaw (open source)</div>
+                <div class="meta-item"><strong>Market</strong>Kalshi (CFTC-regulated)</div>
+                <div class="meta-item"><strong>Detection</strong>Rebalancing + Combinatorial</div>
+                <div class="meta-item"><strong>Status</strong><span class="tag tag-green"
+                        style="margin-left:.4rem">Operational</span></div>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <div class="wrapper">
+
+            <!-- ═══════════════════════════════════════════════════════
+     §1 — USE CASE DEFINITION
+     ═══════════════════════════════════════════════════════ -->
+            <section id="use-case" class="reveal">
+                <h2>01 &mdash; Use Case Definition</h2>
+                <p style="margin-top:1rem;">
+                    Detect risk-free (or near risk-free) arbitrage opportunities on <strong>Kalshi</strong> — the first
+                    CFTC-regulated prediction market in the United States — and deliver actionable alerts in real time.
+                    Scanning is <strong>read-only</strong>; no automated trade execution.
+                </p>
+
+                <div class="stat-row">
+                    <div class="stat">
+                        <div class="val">24/7</div>
+                        <div class="lbl">WebSocket scan</div>
+                    </div>
+                    <div class="stat">
+                        <div class="val">~100ms</div>
+                        <div class="lbl">Alert latency</div>
+                    </div>
+                    <div class="stat">
+                        <div class="val">≥2%</div>
+                        <div class="lbl">Profit threshold</div>
+                    </div>
+                    <div class="stat">
+                        <div class="val">$0</div>
+                        <div class="lbl">Trades executed by agent</div>
+                    </div>
+                </div>
+
+                <h3>What is prediction market arbitrage?</h3>
+                <p style="margin-top:.5rem;">
+                    Kalshi organizes markets in a hierarchy: <strong>Series → Event → Markets</strong>. Markets within
+                    an event are <em>mutually exclusive</em> — exactly one resolves YES ($1.00). When the sum of all YES
+                    prices drifts away from $1.00, or when logically related markets across events are inconsistently
+                    priced, a mathematical profit opportunity exists.
+                </p>
+
+                <div class="two-col" style="margin-top:1.5rem;">
+                    <div class="card">
+                        <span class="icon">⚖️</span>
+                        <h4>Rebalancing Arbitrage</h4>
+                        <p>When Σ(YES prices) within a mutually exclusive event ≠ $1.00, buying all YES (if under) or
+                            all NO (if over) locks in risk-free profit.</p>
+                        <pre style="margin-top:.8rem;"><code><span style="color:var(--text-muted)">Event: KXFED-25JUN (Fed June Meeting)</span>
+Rate stays 4.375%  YES: $0.45
+Rate +25bp         YES: $0.32
+Rate +50bp         YES: $0.12
+Rate -25bp         YES: $0.08
+<span style="color:var(--accent)">────────────────────────────</span>
+TOTAL:                   <span style="color:var(--accent)">$0.97</span>
+Cost to buy all YES:     $0.97
+Guaranteed payout:       $1.00
+<span style="color:var(--accent)">Profit: $0.03 (3.1%)</span></code></pre>
+                    </div>
+
+                    <div class="card">
+                        <span class="icon">🧠</span>
+                        <h4>Combinatorial Arbitrage</h4>
+                        <p>When logically dependent markets across events have inconsistent pricing — e.g., "BTC &gt;
+                            $100k" priced higher than "BTC &gt; $80k" (an implication violation).</p>
+                        <pre style="margin-top:.8rem;"><code><span style="color:var(--text-muted)">Cross-event: Temperature thresholds</span>
+NYC &gt; 80°F on July 4  YES: <span style="color:var(--red)">$0.35</span>
+NYC &gt; 75°F on July 4  YES: <span style="color:var(--accent)">$0.30</span>
+
+<span style="color:var(--amber)">Logical rule:</span> If &gt;80°F then &gt;75°F
+∴ P(80°F) must be ≤ P(75°F)
+
+<span style="color:var(--accent)">Violation detected → arbitrage</span></code></pre>
+                    </div>
+                </div>
+
+                <div class="callout callout-info" style="margin-top:1.5rem;">
+                    <div class="callout-icon">📄</div>
+                    <div>
+                        <strong>Research basis.</strong> The arbitrage concepts are grounded in
+                        <a href="https://arxiv.org/abs/2508.03474" target="_blank">"Unravelling the Probabilistic
+                            Forest: Arbitrage in Prediction Markets"</a>,
+                        which documented <strong>$40 million USD</strong> in extracted arbitrage profits on Polymarket.
+                        The same mathematical principles apply to Kalshi.
+                    </div>
+                </div>
+
+                <h3>Why Kalshi?</h3>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Feature</th>
+                                <th>Kalshi</th>
+                                <th>Polymarket</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>US Legal</td>
+                                <td><span class="tag tag-green">✓ CFTC-regulated</span></td>
+                                <td><span class="tag tag-red">✗ Blocks US users</span></td>
+                            </tr>
+                            <tr>
+                                <td>Currency</td>
+                                <td>Real USD</td>
+                                <td>USDC (crypto)</td>
+                            </tr>
+                            <tr>
+                                <td>Deposits</td>
+                                <td>Bank / debit (ACH)</td>
+                                <td>Crypto wallet</td>
+                            </tr>
+                            <tr>
+                                <td>KYC</td>
+                                <td>Required (SSN)</td>
+                                <td>Optional</td>
+                            </tr>
+                            <tr>
+                                <td>Real-time API</td>
+                                <td>REST + WebSocket</td>
+                                <td>REST + CLOB</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- ═══════════════════════════════════════════════════════
+     §2 — THE OPENCLAW FRAMEWORK
+     ═══════════════════════════════════════════════════════ -->
+            <section id="framework" class="reveal">
+                <h2>02 &mdash; The OpenClaw Framework</h2>
+                <p style="margin-top:1rem;">
+                    <a href="https://github.com/openclaw/openclaw" target="_blank">OpenClaw</a> is an open-source agent
+                    framework that provides a persistent <strong>Gateway</strong> (daemon), multi-channel messaging
+                    (Discord, Telegram, Slack, WhatsApp, iMessage…), a skill/plugin system, cron scheduling, persistent
+                    memory, and tool execution — all running on a <strong>dedicated machine you control</strong>.
+                </p>
+
+                <h3>Why an agent framework for arbitrage?</h3>
+                <p style="margin-top:.5rem;">
+                    A simple Python script can scan for arbitrage. But a <em>system</em> needs: scheduled dependency
+                    refreshes, multi-channel alerting, health monitoring, automatic restarts, persistent context, and —
+                    crucially — the ability to ask the agent ad-hoc questions about what it's seeing. OpenClaw provides
+                    all of that out of the box.
+                </p>
+
+                <div class="card-grid">
+                    <div class="card">
+                        <span class="icon">🖥️</span>
+                        <h4>Gateway</h4>
+                        <p>Always-on daemon on a dedicated Mac Mini. Single point through which all channels, tools,
+                            sessions, and events route. Binds to <code>localhost:18789</code> — never exposed to the
+                            internet.</p>
+                    </div>
+                    <div class="card">
+                        <span class="icon">🔌</span>
+                        <h4>Skills</h4>
+                        <p>Zip-packaged plugins with markdown instructions and scripts. The Kalshi skill contains all
+                            scanner scripts, context, and agent instructions. Loaded from disk — fully auditable.</p>
+                    </div>
+                    <div class="card">
+                        <span class="icon">💬</span>
+                        <h4>Multi-Channel</h4>
+                        <p>Discord channels for categorized alerts (combinatorial, rebalancing, heartbeat, errors). Also
+                            supports Telegram, Slack, WhatsApp, iMessage — route anywhere.</p>
+                    </div>
+                    <div class="card">
+                        <span class="icon">⏰</span>
+                        <h4>Cron Scheduling</h4>
+                        <p>Built-in cron with timezone support. Runs dependency refreshes (daily 6am), market summaries
+                            (8:30am/4pm), health checks (every 4h) — all managed through the CLI.</p>
+                    </div>
+                    <div class="card">
+                        <span class="icon">🧠</span>
+                        <h4>Persistent Memory</h4>
+                        <p>Local archive of context, preferences, session history. The agent remembers your bankroll,
+                            risk tolerance, and market observations across sessions.</p>
+                    </div>
+                    <div class="card">
+                        <span class="icon">🩺</span>
+                        <h4>Diagnostics</h4>
+                        <p><code>openclaw doctor</code> surfaces risky configurations, and
+                            <code>openclaw security audit</code> validates your setup after every update.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="callout callout-tip" style="margin-top:1.5rem;">
+                    <div class="callout-icon">💡</div>
+                    <div>
+                        <strong>Key insight for your team.</strong> OpenClaw is not a chatbot — it has shell access to a
+                        computer. The framework treats the agent as a first-class citizen with persistent state,
+                        scheduled actions, and multi-channel delivery. Any use case that needs "always-on monitoring +
+                        intelligent alerting + human-in-the-loop" is a good fit.
+                    </div>
+                </div>
+            </section>
+
+            <!-- ═══════════════════════════════════════════════════════
+     §3 — AGENT ARCHITECTURE
+     ═══════════════════════════════════════════════════════ -->
+            <section id="architecture" class="reveal">
+                <h2>03 &mdash; Agent Architecture</h2>
+                <p style="margin-top:1rem;">
+                    The system follows the <a href="https://every.to/guides/agent-native"
+                        target="_blank"><strong>Agent-Native Architecture</strong></a> principles. Four core tenets
+                    drove every design decision:
+                </p>
+
+                <div class="card-grid" style="grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));">
+                    <div class="card" style="border-left: 3px solid var(--accent);">
+                        <h4>Parity</h4>
+                        <p>Whatever a human can do through a CLI or API, the agent can achieve through tools. The
+                            scanner scripts are tools the agent invokes — not black boxes.</p>
+                    </div>
+                    <div class="card" style="border-left: 3px solid var(--accent-2);">
+                        <h4>Granularity</h4>
+                        <p>Atomic primitives over monolithic workflows. Separate scripts for scanning, dependency
+                            analysis, position sizing — the agent composes them, not us.</p>
+                    </div>
+                    <div class="card" style="border-left: 3px solid var(--purple);">
+                        <h4>Composability</h4>
+                        <p>New features = new prompts. Adding "post a daily summary" required zero code changes — just a
+                            new cron job with a natural-language instruction.</p>
+                    </div>
+                    <div class="card" style="border-left: 3px solid var(--amber);">
+                        <h4>Emergent Capability</h4>
+                        <p>The agent can answer questions we didn't build features for — "which series had the most arb
+                            opportunities this week?" — by composing existing tools.</p>
+                    </div>
+                </div>
+
+                <h3>System Topology</h3>
+                <div class="desktop-only"
+                    style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:2.5rem 2rem;margin:1.5rem 0;overflow-x:auto;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 420"
+                        style="width:100%;max-width:720px;display:block;margin:0 auto;"
+                        font-family="'JetBrains Mono','Fira Code',monospace" font-size="12">
+                        <!-- Outer box: Mac Mini -->
+                        <rect x="10" y="10" width="700" height="400" rx="12" fill="none" stroke="#232d3f"
+                            stroke-width="1.5" stroke-dasharray="6,3" />
+                        <text x="360" y="38" text-anchor="middle" fill="#47e0a0" font-weight="700" font-size="13">YOUR
+                            DEDICATED MAC MINI</text>
+                        <!-- Inner box: Gateway -->
+                        <rect x="50" y="56" width="620" height="170" rx="10" fill="none" stroke="#5ea3f8"
+                            stroke-width="1.5" />
+                        <text x="360" y="80" text-anchor="middle" fill="#5ea3f8" font-weight="700"
+                            font-size="13">OPENCLAW GATEWAY</text>
+                        <text x="360" y="96" text-anchor="middle" fill="#6b7a90"
+                            font-size="10.5">(ws://127.0.0.1:18789)</text>
+                        <!-- Three component boxes -->
+                        <rect x="90" y="112" width="150" height="56" rx="6" fill="none" stroke="#47e0a0"
+                            stroke-width="1" stroke-dasharray="4,2" />
+                        <text x="165" y="137" text-anchor="middle" fill="#47e0a0" font-size="11.5" font-weight="600">Arb
+                            Scanner</text>
+                        <text x="165" y="155" text-anchor="middle" fill="#47e0a0" font-size="10">(24/7)</text>
+                        <rect x="285" y="112" width="150" height="56" rx="6" fill="none" stroke="#a78bfa"
+                            stroke-width="1" stroke-dasharray="4,2" />
+                        <text x="360" y="137" text-anchor="middle" fill="#a78bfa" font-size="11.5" font-weight="600">AI
+                            Model</text>
+                        <text x="360" y="155" text-anchor="middle" fill="#a78bfa" font-size="10">(Claude)</text>
+                        <rect x="480" y="112" width="150" height="56" rx="6" fill="none" stroke="#fbbf24"
+                            stroke-width="1" stroke-dasharray="4,2" />
+                        <text x="555" y="137" text-anchor="middle" fill="#fbbf24" font-size="11.5"
+                            font-weight="600">Skills</text>
+                        <text x="555" y="155" text-anchor="middle" fill="#fbbf24" font-size="10">(actions)</text>
+                        <!-- Labels below component boxes -->
+                        <text x="165" y="192" text-anchor="middle" fill="#47e0a0" font-size="10"
+                            font-weight="600">Detects</text>
+                        <text x="360" y="192" text-anchor="middle" fill="#a78bfa" font-size="10"
+                            font-weight="600">Analyzes</text>
+                        <text x="555" y="192" text-anchor="middle" fill="#fbbf24" font-size="10"
+                            font-weight="600">Executes</text>
+                        <!-- Arrows down -->
+                        <line x1="165" y1="200" x2="165" y2="260" stroke="#47e0a0" stroke-width="1.5"
+                            marker-end="url(#arrowG)" />
+                        <line x1="360" y1="200" x2="360" y2="260" stroke="#a78bfa" stroke-width="1.5"
+                            marker-end="url(#arrowP)" />
+                        <line x1="555" y1="200" x2="555" y2="260" stroke="#fbbf24" stroke-width="1.5"
+                            marker-end="url(#arrowA)" />
+                        <!-- External service boxes -->
+                        <rect x="90" y="268" width="150" height="56" rx="6" fill="none" stroke="#47e0a0"
+                            stroke-width="1" />
+                        <text x="165" y="293" text-anchor="middle" fill="#47e0a0" font-size="11.5"
+                            font-weight="600">Kalshi API</text>
+                        <text x="165" y="311" text-anchor="middle" fill="#47e0a0" font-size="10">REST + WS</text>
+                        <rect x="285" y="268" width="150" height="56" rx="6" fill="none" stroke="#a78bfa"
+                            stroke-width="1" />
+                        <text x="360" y="293" text-anchor="middle" fill="#a78bfa" font-size="11.5"
+                            font-weight="600">Anthropic</text>
+                        <text x="360" y="311" text-anchor="middle" fill="#a78bfa" font-size="10">Claude API</text>
+                        <rect x="480" y="268" width="150" height="56" rx="6" fill="none" stroke="#fbbf24"
+                            stroke-width="1" />
+                        <text x="555" y="293" text-anchor="middle" fill="#fbbf24" font-size="11.5"
+                            font-weight="600">Discord</text>
+                        <text x="555" y="311" text-anchor="middle" fill="#fbbf24" font-size="10">4 channels</text>
+                        <!-- Arrow markers -->
+                        <defs>
+                            <marker id="arrowG" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+                                <path d="M0,0 L8,3 L0,6" fill="#47e0a0" />
+                            </marker>
+                            <marker id="arrowP" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+                                <path d="M0,0 L8,3 L0,6" fill="#a78bfa" />
+                            </marker>
+                            <marker id="arrowA" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+                                <path d="M0,0 L8,3 L0,6" fill="#fbbf24" />
+                            </marker>
+                        </defs>
+                    </svg>
+                </div>
+
+                <!-- Mobile System Topology -->
+                <div class="mobile-only" style="margin:1.5rem 0;">
+                    <div style="border:1px dashed var(--accent);border-radius:var(--radius);padding:1rem;">
+                        <div style="text-align:center;color:var(--accent);font-weight:700;font-size:.82rem;margin-bottom:.75rem;font-family:var(--mono);">YOUR DEDICATED MAC MINI</div>
+                        <div style="border:1px solid var(--accent-2);border-radius:var(--radius);padding:1rem;">
+                            <div style="text-align:center;color:var(--accent-2);font-weight:700;font-size:.82rem;">OPENCLAW GATEWAY</div>
+                            <div style="text-align:center;color:var(--text-muted);font-size:.72rem;margin-bottom:.75rem;">(ws://127.0.0.1:18789)</div>
+                            <div style="display:flex;flex-direction:column;gap:.75rem;">
+                                <div style="border:1px dashed var(--accent);border-radius:8px;padding:.75rem;text-align:center;">
+                                    <div style="color:var(--accent);font-weight:600;font-size:.82rem;">Arb Scanner <span style="font-size:.72rem;">(24/7)</span></div>
+                                    <div style="color:var(--accent);font-size:.72rem;">Detects</div>
+                                    <div style="color:var(--accent);font-size:1.2rem;margin:.4rem 0;">↓</div>
+                                    <div style="border:1px solid var(--accent);border-radius:6px;padding:.5rem;">
+                                        <div style="color:var(--accent);font-weight:600;font-size:.82rem;">Kalshi API</div>
+                                        <div style="color:var(--text-muted);font-size:.72rem;">REST + WS</div>
+                                    </div>
+                                </div>
+                                <div style="border:1px dashed var(--purple);border-radius:8px;padding:.75rem;text-align:center;">
+                                    <div style="color:var(--purple);font-weight:600;font-size:.82rem;">AI Model <span style="font-size:.72rem;">(Claude)</span></div>
+                                    <div style="color:var(--purple);font-size:.72rem;">Analyzes</div>
+                                    <div style="color:var(--purple);font-size:1.2rem;margin:.4rem 0;">↓</div>
+                                    <div style="border:1px solid var(--purple);border-radius:6px;padding:.5rem;">
+                                        <div style="color:var(--purple);font-weight:600;font-size:.82rem;">Anthropic</div>
+                                        <div style="color:var(--text-muted);font-size:.72rem;">Claude API</div>
+                                    </div>
+                                </div>
+                                <div style="border:1px dashed var(--amber);border-radius:8px;padding:.75rem;text-align:center;">
+                                    <div style="color:var(--amber);font-weight:600;font-size:.82rem;">Skills <span style="font-size:.72rem;">(actions)</span></div>
+                                    <div style="color:var(--amber);font-size:.72rem;">Executes</div>
+                                    <div style="color:var(--amber);font-size:1.2rem;margin:.4rem 0;">↓</div>
+                                    <div style="border:1px solid var(--amber);border-radius:6px;padding:.5rem;">
+                                        <div style="color:var(--amber);font-weight:600;font-size:.82rem;">Discord</div>
+                                        <div style="color:var(--text-muted);font-size:.72rem;">4 channels</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <h3>The <code>context.md</code> Pattern</h3>
+                <p style="margin-top:.5rem;">
+                    Following the agent-architecture guide, the Kalshi skill uses a <code>context.md</code> file that
+                    the agent reads at session start. This is the "shared state" between human and agent — bankroll,
+                    risk tolerance, channel IDs, scanner status, and health history. The agent updates it; the human
+                    audits it.
+                </p>
+
+                <pre><code># Kalshi Context
+
+## Bankroll
+- Current: $1,000
+- Max per position: $100 (10%)
+- Kelly fraction: 0.5 (half-Kelly)
+
+## Risk Tolerance
+- Minimum profit threshold: 2%
+- Minimum liquidity: $500 volume
+
+## Discord Channels
+- Combinatorial: channel:YOUR_CHANNEL_ID
+- Rebalancing:   channel:YOUR_CHANNEL_ID
+- Heartbeat:     channel:YOUR_CHANNEL_ID
+- Errors:        channel:YOUR_CHANNEL_ID
+
+## Preferences
+- Auto-trade: DISABLED</code></pre>
+            </section>
+
+            <!-- ═══════════════════════════════════════════════════════
+     §4 — DATA PIPELINE
+     ═══════════════════════════════════════════════════════ -->
+            <section id="data-pipeline" class="reveal">
+                <h2>04 &mdash; Data Pipeline</h2>
+                <p style="margin-top:1rem;">
+                    The data pipeline has two legs: a daily LLM-powered dependency analysis, and a 24/7 real-time
+                    WebSocket scanner. Both are standalone Python scripts invoked as OpenClaw tools.
+                </p>
+
+                <h3>Pipeline Flow</h3>
+                <div class="process-steps">
+                    <div class="process-step">
+                        <div class="step-num">1</div>
+                        <h4>Dependency Analysis</h4>
+                        <p>LLM pairs top 5 events/series, detects logical relationships. Daily via cron.</p>
+                    </div>
+                    <div class="process-step">
+                        <div class="step-num">2</div>
+                        <h4>Market Data Ingest</h4>
+                        <p>REST API loads 30k-50k open markets on startup. Organizes by Series → Event.</p>
+                    </div>
+                    <div class="process-step">
+                        <div class="step-num">3</div>
+                        <h4>WebSocket Stream</h4>
+                        <p>Persistent connection to Kalshi ticker channel. Real-time price updates ~100ms.</p>
+                    </div>
+                    <div class="process-step">
+                        <div class="step-num">4</div>
+                        <h4>Arbitrage Detection</h4>
+                        <p>Rebalancing (Σ YES ≠ $1) + Combinatorial (implication violations). Fee-aware filtering.</p>
+                    </div>
+                    <div class="process-step">
+                        <div class="step-num">5</div>
+                        <h4>Alert Delivery</h4>
+                        <p>Discord threads with descriptive names. Categorized across 4 channels.</p>
+                    </div>
+                </div>
+
+                <h3>Dependency Generation (<code>market_dependencies.py</code>)</h3>
+                <div class="desktop-only"
+                    style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:2.5rem 2rem;margin:1.5rem 0;overflow-x:auto;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 580 440"
+                        style="width:100%;max-width:580px;display:block;margin:0 auto;"
+                        font-family="'JetBrains Mono','Fira Code',monospace" font-size="12">
+                        <!-- Column headers -->
+                        <text x="140" y="20" text-anchor="middle" fill="#6b7a90" font-size="11.5">Kalshi REST API</text>
+                        <text x="430" y="20" text-anchor="middle" fill="#6b7a90" font-size="11.5">Claude (Anthropic
+                            API)</text>
+                        <!-- Left column line -->
+                        <line x1="140" y1="32" x2="140" y2="280" stroke="#5ea3f8" stroke-width="1.5" />
+                        <!-- Right column line -->
+                        <line x1="430" y1="32" x2="430" y2="300" stroke="#a78bfa" stroke-width="1.5" />
+                        <!-- Step 1: Load all events -->
+                        <circle cx="140" cy="60" r="4" fill="#5ea3f8" />
+                        <text x="155" y="55" fill="#5ea3f8" font-weight="600" font-size="11.5">Load all events</text>
+                        <text x="155" y="72" fill="#6b7a90" font-size="10">(30k-50k markets, parlays filtered)</text>
+                        <!-- Step 2: Top 5 events -->
+                        <circle cx="140" cy="120" r="4" fill="#5ea3f8" />
+                        <text x="155" y="115" fill="#5ea3f8" font-weight="600" font-size="11.5">Top 5
+                            events/series</text>
+                        <text x="155" y="132" fill="#6b7a90" font-size="10">(by volume)</text>
+                        <!-- Step 3: Pair candidate events -->
+                        <circle cx="140" cy="185" r="4" fill="#5ea3f8" />
+                        <text x="155" y="180" fill="#5ea3f8" font-weight="600" font-size="11.5">Pair candidate
+                            events</text>
+                        <text x="155" y="197" fill="#6b7a90" font-size="10">(~600-700 pairs)</text>
+                        <!-- Horizontal arrow: send to Claude -->
+                        <line x1="155" y1="230" x2="420" y2="230" stroke="#fbbf24" stroke-width="1.5"
+                            marker-end="url(#arrowY)" />
+                        <text x="288" y="222" text-anchor="middle" fill="#fbbf24" font-size="10" font-weight="600">send
+                            1 market each</text>
+                        <!-- Step 4: Claude analyzes -->
+                        <circle cx="430" cy="280" r="4" fill="#a78bfa" />
+                        <text x="445" y="275" fill="#a78bfa" font-weight="600" font-size="11.5">Analyze logical</text>
+                        <text x="445" y="292" fill="#a78bfa" font-weight="600" font-size="11.5">dependencies</text>
+                        <!-- Arrow down to output -->
+                        <line x1="430" y1="305" x2="430" y2="360" stroke="#a78bfa" stroke-width="1.5"
+                            marker-end="url(#arrowPP)" />
+                        <!-- Output -->
+                        <rect x="350" y="368" width="160" height="40" rx="6" fill="rgba(71,224,160,0.08)"
+                            stroke="#47e0a0" stroke-width="1" />
+                        <text x="430" y="386" text-anchor="middle" fill="#47e0a0" font-weight="700"
+                            font-size="11.5">dependencies.json</text>
+                        <text x="430" y="400" text-anchor="middle" fill="#6b7a90" font-size="9.5">(~$1.50-2.00 per
+                            run)</text>
+                        <!-- Arrow markers -->
+                        <defs>
+                            <marker id="arrowY" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+                                <path d="M0,0 L8,3 L0,6" fill="#fbbf24" />
+                            </marker>
+                            <marker id="arrowPP" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+                                <path d="M0,0 L8,3 L0,6" fill="#a78bfa" />
+                            </marker>
+                        </defs>
+                    </svg>
+                </div>
+
+                <!-- Mobile Dependencies Flow -->
+                <div class="mobile-only" style="margin:1.5rem 0;">
+                    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.25rem;">
+                        <div style="display:flex;flex-direction:column;gap:.5rem;">
+                            <div style="text-align:center;color:var(--text-muted);font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.25rem;">Kalshi REST API</div>
+                            <div style="border-left:3px solid var(--accent-2);padding:.5rem .75rem;">
+                                <div style="color:var(--accent-2);font-weight:600;font-size:.82rem;">Load all events</div>
+                                <div style="color:var(--text-muted);font-size:.72rem;">(30k-50k markets, parlays filtered)</div>
+                            </div>
+                            <div style="text-align:center;color:var(--accent-2);font-size:1.1rem;">↓</div>
+                            <div style="border-left:3px solid var(--accent-2);padding:.5rem .75rem;">
+                                <div style="color:var(--accent-2);font-weight:600;font-size:.82rem;">Top 5 events/series</div>
+                                <div style="color:var(--text-muted);font-size:.72rem;">(by volume)</div>
+                            </div>
+                            <div style="text-align:center;color:var(--accent-2);font-size:1.1rem;">↓</div>
+                            <div style="border-left:3px solid var(--accent-2);padding:.5rem .75rem;">
+                                <div style="color:var(--accent-2);font-weight:600;font-size:.82rem;">Pair candidate events</div>
+                                <div style="color:var(--text-muted);font-size:.72rem;">(~600-700 pairs)</div>
+                            </div>
+                            <div style="text-align:center;color:var(--amber);font-size:1.1rem;">↓ <span style="font-size:.72rem;font-weight:600;">send 1 market each</span></div>
+                            <div style="text-align:center;color:var(--text-muted);font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin-top:.25rem;">Claude (Anthropic API)</div>
+                            <div style="border-left:3px solid var(--purple);padding:.5rem .75rem;">
+                                <div style="color:var(--purple);font-weight:600;font-size:.82rem;">Analyze logical dependencies</div>
+                            </div>
+                            <div style="text-align:center;color:var(--purple);font-size:1.1rem;">↓</div>
+                            <div style="border:1px solid var(--accent);border-radius:8px;padding:.75rem;text-align:center;background:rgba(71,224,160,0.08);">
+                                <div style="color:var(--accent);font-weight:700;font-size:.85rem;">dependencies.json</div>
+                                <div style="color:var(--text-muted);font-size:.72rem;">(~$1.50-2.00 per run)</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <h3>Real-Time Scanner (<code>realtime_scanner.py</code>)</h3>
+                <div class="flow-diagram"><span class="hl-muted"> On startup:</span>
+                    <span class="hl-blue">│</span>
+                    <span class="hl-blue">├──▶</span> <span class="hl-green">Load dependencies.json</span> <span
+                        class="hl-muted">(if --no-deps not set)</span>
+                    <span class="hl-blue">├──▶</span> <span class="hl-green">REST: Load initial market data</span> <span
+                        class="hl-muted">(~2,800 markets, ~850 events)</span>
+                    <span class="hl-blue">├──▶</span> <span class="hl-green">Index by event_ticker for O(1)
+                        lookup</span>
+                    <span class="hl-blue">│</span>
+                    <span class="hl-blue">▼</span>
+                    <span class="hl-amber">Connect WebSocket</span> <span
+                        class="hl-muted">wss://api.elections.kalshi.com/trade-api/ws/v2</span>
+                    <span class="hl-blue">│</span>
+                    <span class="hl-blue">├──▶</span> Subscribe to <span class="hl-green">ticker</span> channel <span
+                        class="hl-muted">(public, no auth needed)</span>
+                    <span class="hl-blue">│</span>
+                    <span class="hl-blue">▼</span>
+                    <span class="hl-amber">Event loop (24/7):</span>
+                    <span class="hl-blue">│</span>
+                    <span class="hl-blue">├──▶</span> Ticker update received
+                    <span class="hl-blue">│</span> <span class="hl-blue">│</span>
+                    <span class="hl-blue">│</span> <span class="hl-blue">├──▶</span> Update in-memory price cache
+                    <span class="hl-blue">│</span> <span class="hl-blue">├──▶</span> <span class="hl-green">Check
+                        rebalancing</span>: Σ(YES) in event ≠ $1.00?
+                    <span class="hl-blue">│</span> <span class="hl-blue">├──▶</span> <span class="hl-purple">Check
+                        combinatorial</span>: implication violations?
+                    <span class="hl-blue">│</span> <span class="hl-blue">├──▶</span> <span class="hl-amber">Fee-aware
+                        filter</span>: profit &gt; threshold + fees?
+                    <span class="hl-blue">│</span> <span class="hl-blue">├──▶</span> <span
+                        class="hl-muted">Dedup</span>: already alerted in this window?
+                    <span class="hl-blue">│</span> <span class="hl-blue">│</span>
+                    <span class="hl-blue">│</span> <span class="hl-blue">└──▶</span> <span class="hl-red">Alert!</span>
+                    → Discord thread in appropriate channel
+                    <span class="hl-blue">│</span>
+                    <span class="hl-blue">├──▶</span> Heartbeat ping <span class="hl-muted">(keep-alive)</span>
+                    <span class="hl-blue">├──▶</span> Reconnect on disconnect <span class="hl-muted">(exponential
+                        backoff)</span>
+                    <span class="hl-blue">│</span>
+                    <span class="hl-blue">└──▶</span> <span class="hl-muted">Loop forever</span>
+                </div>
+
+                <h3>WebSocket vs. Polling</h3>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Aspect</th>
+                                <th>WebSocket (Production)</th>
+                                <th>Polling (Debug/Ad-hoc)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Latency</td>
+                                <td><span class="tag tag-green">~100ms</span></td>
+                                <td><span class="tag tag-amber">Minutes</span></td>
+                            </tr>
+                            <tr>
+                                <td>Rate Limits</td>
+                                <td>None (single connection)</td>
+                                <td>20 req/sec (Basic tier)</td>
+                            </tr>
+                            <tr>
+                                <td>Auth Required</td>
+                                <td>No (public ticker channel)</td>
+                                <td>No (public REST)</td>
+                            </tr>
+                            <tr>
+                                <td>Best For</td>
+                                <td>Production monitoring</td>
+                                <td>One-shot checks, testing</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <h3>Discord Alert Pattern</h3>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Channel</th>
+                                <th>Purpose</th>
+                                <th>Frequency</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>#arbitrage-combinatorial</code></td>
+                                <td>Cross-market logical pricing violations</td>
+                                <td>On detection</td>
+                            </tr>
+                            <tr>
+                                <td><code>#arbitrage-rebalancing</code></td>
+                                <td>Σ(YES) ≠ $1.00 within mutually exclusive events</td>
+                                <td>On detection</td>
+                            </tr>
+                            <tr>
+                                <td><code>#kalshi-heartbeat</code></td>
+                                <td>Health checks + market open/close/EOD summaries</td>
+                                <td>Every 4h + scheduled</td>
+                            </tr>
+                            <tr>
+                                <td><code>#kalshi-errors</code></td>
+                                <td>Scanner down, WebSocket errors, crash notifications</td>
+                                <td>On error only</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <p style="margin-top:1rem; font-size:.88rem; color:var(--text-muted);">
+                    Every alert creates a <strong>thread</strong> with a descriptive name (e.g., "BTC above 99k
+                    threshold") — analysis happens in-thread, keeping channels clean.
+                </p>
+            </section>
+
+            <!-- ═══════════════════════════════════════════════════════
+     §5 — SECURITY MODEL
+     ═══════════════════════════════════════════════════════ -->
+            <section id="security" class="reveal">
+                <h2>05 &mdash; Security Model</h2>
+                <p style="margin-top:1rem;">
+                    OpenClaw is powerful — persistent memory, multi-channel control, shell access. Per Simon Willison,
+                    it's the most likely candidate for a "Challenger disaster" in agent security. The architecture was
+                    hardened following our <a
+                        href="https://claude.ai/public/artifacts/155311d8-60e3-4143-bd90-65af86c1b721"
+                        target="_blank"><strong>OpenClaw Setup Guide</strong></a> (compiled from the security research
+                    of Willison,
+                    Cisco AI Defense, IBM Research, and Palo Alto Networks).
+                </p>
+
+                <h3>Willison's Lethal Trifecta</h3>
+                <p style="margin-top:.5rem;">OpenClaw hits all three risk vectors simultaneously. The goal:
+                    <strong>break the trifecta wherever possible</strong>.
+                </p>
+
+                <div class="trifecta-grid">
+                    <div class="trifecta-card high">
+                        <span class="trifecta-label">Private Data</span>
+                        <div class="trifecta-body">
+                            <strong>Files, credentials, session tokens, browser history.</strong>
+                            Mitigated by running on a dedicated machine with nothing else installed — no
+                            browser sessions, no saved passwords outside scope.
+                        </div>
+                    </div>
+                    <div class="trifecta-card medium">
+                        <span class="trifecta-label">Untrusted Content</span>
+                        <div class="trifecta-body">
+                            <strong>Market data, WebSocket messages, external APIs.</strong>
+                            Mitigated by read-only scanning (no trade execution), and Discord DM
+                            allowlisting so only the operator can issue commands.
+                        </div>
+                    </div>
+                    <div class="trifecta-card medium">
+                        <span class="trifecta-label">External Comms</span>
+                        <div class="trifecta-body">
+                            <strong>Discord messages, HTTP requests, outbound actions.</strong>
+                            Mitigated by scoping Discord to specific server channels, binding Gateway
+                            to localhost, and using Tailscale for remote access.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="callout callout-danger" style="margin-top:1.5rem;">
+                    <div class="callout-icon">⚠️</div>
+                    <div>
+                        <strong>Palo Alto Networks' fourth risk:</strong> persistent memory enables
+                        <strong>delayed-execution attacks</strong>. A poisoned instruction can sit dormant for days,
+                        appear benign, and later assemble into something dangerous. This is why memory audits are
+                        non-negotiable.
+                    </div>
+                </div>
+
+                <h3>Security Architecture Decisions</h3>
+
+                <div class="card-grid" style="grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));">
+                    <div class="card">
+                        <span class="icon">🖥️</span>
+                        <h4>Dedicated Machine</h4>
+                        <p>Mac Mini (~$600). Runs the Gateway and nothing else. If compromised, blast radius is
+                            contained — your laptop, browser, passwords are untouched.</p>
+                    </div>
+                    <div class="card">
+                        <span class="icon">🔒</span>
+                        <h4>Localhost-Only Gateway</h4>
+                        <p>Gateway binds to <code>127.0.0.1:18789</code>. Never <code>0.0.0.0</code>. Remote access
+                            exclusively through Tailscale VPN. Control UI is localhost-only.</p>
+                    </div>
+                    <div class="card">
+                        <span class="icon">🔑</span>
+                        <h4>API Key Isolation</h4>
+                        <p>Dedicated Anthropic key with $50-100/mo hard cap at the provider dashboard. Separate from all
+                            other projects. Rotated monthly.</p>
+                    </div>
+                    <div class="card">
+                        <span class="icon">🛡️</span>
+                        <h4>RSA-PSS Authentication</h4>
+                        <p>Kalshi uses RSA key signing, not simple secrets. Private key stored at <code>chmod 600</code>
+                            on the dedicated machine. Never leaves disk.</p>
+                    </div>
+                    <div class="card">
+                        <span class="icon">👤</span>
+                        <h4>Discord DM Allowlist</h4>
+                        <p>DM policy set to <code>allowlist</code> — only the operator's Discord user ID can issue
+                            commands. Blocks prompt injection via DMs from other users.</p>
+                    </div>
+                    <div class="card">
+                        <span class="icon">🧹</span>
+                        <h4>Memory Hygiene</h4>
+                        <p>Regular audits of <code>openclaw memory list</code>. Look for instructions, URLs, or
+                            directives you didn't put there. Purge after any suspicious behavior.</p>
+                    </div>
+                </div>
+
+                <h3>Account Tiering</h3>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Tier</th>
+                                <th>Connect?</th>
+                                <th>Examples</th>
+                                <th>Rationale</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><span class="tag tag-green">Tier 1 ✓</span></td>
+                                <td>Yes</td>
+                                <td>Calendar, reminders, public APIs, weather</td>
+                                <td>Low stakes, nothing irreversible</td>
+                            </tr>
+                            <tr>
+                                <td><span class="tag tag-amber">Tier 2 ⚠</span></td>
+                                <td>Carefully</td>
+                                <td>Email (alias only), messaging channels</td>
+                                <td>Prompt injection surface — anyone can message your agent</td>
+                            </tr>
+                            <tr>
+                                <td><span class="tag tag-red">Tier 3 ✗</span></td>
+                                <td>No</td>
+                                <td>Banking, primary Google, work accounts</td>
+                                <td>Exfiltration attacks demonstrated against more mature platforms</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="callout callout-warn">
+                    <div class="callout-icon">🔍</div>
+                    <div>
+                        <strong>Skills are the #1 attack vector.</strong> Cisco tested a popular OpenClaw skill and
+                        found it was functionally malware — silently exfiltrating data via curl. We wrote all skills
+                        in-house, audited source before installation, and run <code>openclaw doctor</code> +
+                        <code>openclaw security audit</code> after every update.
+                    </div>
+                </div>
+
+                <h3>Monthly Security Checklist</h3>
+                <div id="security-checklist" class="card-grid" style="grid-template-columns: repeat(3, 1fr); margin-top: 1rem;">
+                    <div class="card" style="text-align:center;">
+                        <span class="icon">🔄</span>
+                        <h4>Rotate API Keys</h4>
+                        <p>Regenerate Anthropic + Kalshi API keys. Update on dedicated machine only.</p>
+                    </div>
+                    <div class="card" style="text-align:center;">
+                        <span class="icon">🧠</span>
+                        <h4>Audit Memory</h4>
+                        <p>Run <code>openclaw memory list</code>. Remove any rogue instructions or unknown entries.</p>
+                    </div>
+                    <div class="card" style="text-align:center;">
+                        <span class="icon">🔌</span>
+                        <h4>Re-check Skills</h4>
+                        <p>Verify only expected skills are installed. Remove anything you didn't add.</p>
+                    </div>
+                    <div class="card" style="text-align:center;">
+                        <span class="icon">🩺</span>
+                        <h4>Run Diagnostics</h4>
+                        <p>Execute <code>openclaw doctor</code> to surface config drift or security warnings.</p>
+                    </div>
+                    <div class="card" style="text-align:center;">
+                        <span class="icon">🌐</span>
+                        <h4>Verify Control UI</h4>
+                        <p>Confirm Control UI is not publicly accessible. Should only respond on localhost.</p>
+                    </div>
+                    <div class="card" style="text-align:center;">
+                        <span class="icon">📋</span>
+                        <h4>Review Accounts</h4>
+                        <p>Check connected Discord accounts and channel permissions. Remove stale entries.</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ═══════════════════════════════════════════════════════
+     §6 — SKILLS & TOOL DESIGN
+     ═══════════════════════════════════════════════════════ -->
+            <section id="skills" class="reveal">
+                <h2>06 &mdash; Skills &amp; Tool Design</h2>
+                <p style="margin-top:1rem;">
+                    Following the agent-architecture principle of <strong>granularity</strong> — atomic primitives over
+                    monolithic workflows — each script does exactly one thing. The agent composes them.
+                </p>
+
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Script</th>
+                                <th>Purpose</th>
+                                <th>Runtime</th>
+                                <th>Auth</th>
+                                <th>Cost</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>realtime_scanner.py</code> ⚡</td>
+                                <td>24/7 WebSocket scanner — both rebalancing + combinatorial</td>
+                                <td>Daemon (always-on)</td>
+                                <td>API key (WebSocket auth)</td>
+                                <td>$0</td>
+                            </tr>
+                            <tr>
+                                <td><code>market_dependencies.py</code> 🧠</td>
+                                <td>LLM-based dependency detection — generates <code>dependencies.json</code></td>
+                                <td>One-shot (daily cron)</td>
+                                <td>Anthropic API</td>
+                                <td>~$1.50-2/run</td>
+                            </tr>
+                            <tr>
+                                <td><code>rebalancing_scanner.py</code></td>
+                                <td>Quick one-shot rebalancing check (REST polling)</td>
+                                <td>One-shot (debug/test)</td>
+                                <td>None (public REST)</td>
+                                <td>$0</td>
+                            </tr>
+                            <tr>
+                                <td><code>combinatorial_scanner.py</code></td>
+                                <td>One-shot cross-market logic scan (legacy)</td>
+                                <td>One-shot (debug/test)</td>
+                                <td>None (public REST)</td>
+                                <td>$0</td>
+                            </tr>
+                            <tr>
+                                <td><code>bankroll.py</code></td>
+                                <td>Kelly criterion position sizing calculator</td>
+                                <td>One-shot</td>
+                                <td>None (local calc)</td>
+                                <td>$0</td>
+                            </tr>
+                            <tr>
+                                <td><code>test_scanner.py</code></td>
+                                <td>3-stage validation suite (synthetic + live)</td>
+                                <td>One-shot (CI/test)</td>
+                                <td>Stage 2: none</td>
+                                <td>$0</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <h3>Skill File Structure</h3>
+                <pre><code>~/.openclaw-kalshi/skills/kalshi/
+├── SKILL.md              # Agent instructions (markdown)
+├── context.md            # User context (bankroll, channels, prefs)
+└── scripts/
+    ├── realtime_scanner.py
+    ├── market_dependencies.py
+    ├── rebalancing_scanner.py
+    ├── combinatorial_scanner.py
+    ├── bankroll.py
+    ├── test_scanner.py
+    ├── requirements.txt
+    └── dependencies.json    # LLM-generated (output of market_dependencies.py)</code></pre>
+
+                <h3>Design Principle: Tools Are Primitives</h3>
+                <div class="two-col">
+                    <div class="card" style="border: 1px solid rgba(248,113,113,.2);">
+                        <h4 style="color:var(--red);">❌ Wrong — Bundled Logic</h4>
+                        <pre style="margin-top:.5rem;"><code>scan_analyze_and_alert(markets)
+# one tool does everything
+# can't change behavior without code</code></pre>
+                    </div>
+                    <div class="card" style="border: 1px solid rgba(71,224,160,.2);">
+                        <h4 style="color:var(--accent);">✓ Right — Atomic Primitives</h4>
+                        <pre style="margin-top:.5rem;"><code>realtime_scanner.py    # detects
+market_dependencies.py # analyzes
+bankroll.py            # sizes
+discord tool           # alerts
+# agent composes; behavior = prompts</code></pre>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ═══════════════════════════════════════════════════════
+     §7 — OPERATIONS & RELIABILITY
+     ═══════════════════════════════════════════════════════ -->
+            <section id="ops" class="reveal">
+                <h2>07 &mdash; Operations &amp; Reliability</h2>
+                <p style="margin-top:1rem;">
+                    The system is designed to self-heal. System cron restarts the scanner every 5 minutes if it dies.
+                    OpenClaw cron runs health checks every 4 hours and posts status to Discord.
+                </p>
+
+                <h3>Cron Schedule</h3>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Job</th>
+                                <th>Schedule (CT)</th>
+                                <th>Type</th>
+                                <th>Purpose</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Scanner auto-restart</td>
+                                <td>Every 5 min</td>
+                                <td><span class="tag tag-blue">System cron</span></td>
+                                <td>Checks if <code>realtime_scanner.py</code> is alive; restarts if not</td>
+                            </tr>
+                            <tr>
+                                <td>Dependency refresh</td>
+                                <td>Daily 6:00 AM</td>
+                                <td><span class="tag tag-purple">OpenClaw cron</span></td>
+                                <td>Regenerate <code>dependencies.json</code> via Claude (~$1.50)</td>
+                            </tr>
+                            <tr>
+                                <td>Market open summary</td>
+                                <td>8:30 AM weekdays</td>
+                                <td><span class="tag tag-purple">OpenClaw cron</span></td>
+                                <td>Post scanner status + overnight opportunities to heartbeat</td>
+                            </tr>
+                            <tr>
+                                <td>Market close summary</td>
+                                <td>4:00 PM weekdays</td>
+                                <td><span class="tag tag-purple">OpenClaw cron</span></td>
+                                <td>Post today's opportunities + best edge seen</td>
+                            </tr>
+                            <tr>
+                                <td>EOD summary</td>
+                                <td>10:00 PM daily</td>
+                                <td><span class="tag tag-purple">OpenClaw cron</span></td>
+                                <td>Full daily recap, scanner health, dependency cache age</td>
+                            </tr>
+                            <tr>
+                                <td>Health check</td>
+                                <td>Every 4h at :30</td>
+                                <td><span class="tag tag-purple">OpenClaw cron</span></td>
+                                <td>Verify process + log freshness; post to heartbeat, errors to errors</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <h3>Restart After Reboot</h3>
+                <p style="margin-top:.5rem;">
+                    Everything in <code>~/.openclaw-kalshi/</code> (skills, .env, config, PEM key, dependencies.json)
+                    survives reboots. Only <strong>3 processes</strong> need restart:
+                </p>
+                <div class="process-steps" style="grid-template-columns: repeat(3, 1fr);">
+                    <div class="process-step">
+                        <div class="step-num">1</div>
+                        <h4>Load env vars</h4>
+                        <p><code>source ~/.openclaw-kalshi/.env</code></p>
+                    </div>
+                    <div class="process-step">
+                        <div class="step-num">2</div>
+                        <h4>Start Gateway</h4>
+                        <p><code>nohup openclaw gateway run</code></p>
+                    </div>
+                    <div class="process-step">
+                        <div class="step-num">3</div>
+                        <h4>Start Scanner</h4>
+                        <p><code>nohup python3 realtime_scanner.py</code></p>
+                    </div>
+                </div>
+
+                <h3>Credential Storage Map</h3>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Credential</th>
+                                <th>Storage</th>
+                                <th>Method</th>
+                                <th>Used By</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Anthropic API Key</td>
+                                <td>OpenClaw config</td>
+                                <td><code>openclaw onboard</code> wizard</td>
+                                <td>Gateway (LLM calls)</td>
+                            </tr>
+                            <tr>
+                                <td>Anthropic API Key</td>
+                                <td><code>~/.openclaw-kalshi/.env</code></td>
+                                <td>Environment variable</td>
+                                <td>Python scripts (dependencies)</td>
+                            </tr>
+                            <tr>
+                                <td>Discord Bot Token</td>
+                                <td>OpenClaw config</td>
+                                <td><code>openclaw onboard</code> wizard</td>
+                                <td>Gateway (Discord channel)</td>
+                            </tr>
+                            <tr>
+                                <td>Kalshi API Key ID</td>
+                                <td><code>~/.openclaw-kalshi/.env</code></td>
+                                <td>Environment variable</td>
+                                <td>Scanner (WebSocket auth)</td>
+                            </tr>
+                            <tr>
+                                <td>Kalshi Private Key</td>
+                                <td>File on disk (<code>chmod 600</code>)</td>
+                                <td>RSA-PSS signing</td>
+                                <td>Scanner (request signing)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="callout callout-info">
+                    <div class="callout-icon">💡</div>
+                    <div>
+                        <strong>Why two places for the Anthropic key?</strong> OpenClaw's gateway reads from its own
+                        config store. Standalone Python scripts read from environment variables. Same key, two access
+                        paths — so both the gateway and scripts can reach the API independently.
+                    </div>
+                </div>
+            </section>
+
+            <!-- ═══════════════════════════════════════════════════════
+     §8 — BUILD PHASES & STATUS
+     ═══════════════════════════════════════════════════════ -->
+            <section id="phases" class="reveal">
+                <h2>08 &mdash; Build Phases &amp; Status</h2>
+
+                <div class="timeline">
+                    <div class="timeline-item">
+                        <div class="timeline-dot done"></div>
+                        <h4>Phase 1 — OpenClaw Infrastructure <span class="tag tag-green"
+                                style="margin-left:.5rem">Complete</span></h4>
+                        <p>Dedicated Mac Mini, Gateway running, Tailscale configured, <code>openclaw doctor</code>
+                            passing.</p>
+                    </div>
+                    <div class="timeline-item">
+                        <div class="timeline-dot done"></div>
+                        <h4>Phase 2 — Kalshi API Integration <span class="tag tag-green"
+                                style="margin-left:.5rem">Complete</span></h4>
+                        <p>REST + WebSocket API access. RSA-PSS authentication. Market data ingestion verified.</p>
+                    </div>
+                    <div class="timeline-item">
+                        <div class="timeline-dot done"></div>
+                        <h4>Phase 3 — Rebalancing Scanner <span class="tag tag-green"
+                                style="margin-left:.5rem">Complete</span></h4>
+                        <p><code>rebalancing_scanner.py</code> — detects Σ(YES) ≠ $1.00 within mutually exclusive
+                            events.</p>
+                    </div>
+                    <div class="timeline-item">
+                        <div class="timeline-dot done"></div>
+                        <h4>Phase 4 — Combinatorial Scanner <span class="tag tag-green"
+                                style="margin-left:.5rem">Complete</span></h4>
+                        <p><code>combinatorial_scanner.py</code> + <code>market_dependencies.py</code> — LLM-powered
+                            cross-market logic analysis.</p>
+                    </div>
+                    <div class="timeline-item">
+                        <div class="timeline-dot done"></div>
+                        <h4>Phase 5 — Real-Time Scanner <span class="tag tag-green"
+                                style="margin-left:.5rem">Complete</span></h4>
+                        <p><code>realtime_scanner.py</code> — unified WebSocket scanner with both detection types,
+                            Discord routing, auto-restart.</p>
+                    </div>
+                    <div class="timeline-item">
+                        <div class="timeline-dot pending"></div>
+                        <h4>Phase 6 — Paper Trading <span class="tag tag-amber" style="margin-left:.5rem">Pending</span>
+                        </h4>
+                        <p>Validate with Kalshi demo environment. Measure detection accuracy, false positive rate,
+                            latency.</p>
+                    </div>
+                    <div class="timeline-item">
+                        <div class="timeline-dot pending"></div>
+                        <h4>Phase 7 — Live Execution <span class="tag tag-amber"
+                                style="margin-left:.5rem">Pending</span></h4>
+                        <p>Trade execution skills (limit orders, abort logic). Half-Kelly sizing with configurable
+                            guardrails.</p>
+                    </div>
+                </div>
+
+                <h3>Success Metrics</h3>
+                <div class="stat-row">
+                    <div class="stat">
+                        <div class="val">80%+</div>
+                        <div class="lbl">Detection Rate</div>
+                    </div>
+                    <div class="stat">
+                        <div class="val">&lt;10%</div>
+                        <div class="lbl">False Positives</div>
+                    </div>
+                    <div class="stat">
+                        <div class="val">&gt;90%</div>
+                        <div class="lbl">Execution Success</div>
+                    </div>
+                    <div class="stat">
+                        <div class="val">&gt;2%</div>
+                        <div class="lbl">Profit After Fees</div>
+                    </div>
+                    <div class="stat">
+                        <div class="val">100%</div>
+                        <div class="lbl">Market Coverage</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ═══════════════════════════════════════════════════════
+     §9 — APPLYING TO YOUR USE CASE
+     ═══════════════════════════════════════════════════════ -->
+            <section id="apply" class="reveal">
+                <h2>09 &mdash; Applying This to Your Use Case</h2>
+                <p style="margin-top:1rem;">
+                    This reference architecture is designed for your engineering team to use as a template. The pattern
+                    generalizes to any use case that follows the "always-on monitoring → intelligent analysis →
+                    human-in-the-loop alerting" model.
+                </p>
+
+                <h3>The Generalizable Pattern</h3>
+                <div class="process-steps" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
+                    <div class="process-step">
+                        <div class="step-num">1</div>
+                        <h4>Isolate</h4>
+                        <p>Dedicated machine. Localhost gateway. Scoped credentials.</p>
+                    </div>
+                    <div class="process-step">
+                        <div class="step-num">2</div>
+                        <h4>Ingest</h4>
+                        <p>Build atomic data-fetch scripts. REST + WebSocket. No monoliths.</p>
+                    </div>
+                    <div class="process-step">
+                        <div class="step-num">3</div>
+                        <h4>Analyze</h4>
+                        <p>LLM for judgment, code for math. Separate concerns into scripts.</p>
+                    </div>
+                    <div class="process-step">
+                        <div class="step-num">4</div>
+                        <h4>Alert</h4>
+                        <p>Multi-channel delivery. Categorized. Threaded. Actionable.</p>
+                    </div>
+                    <div class="process-step">
+                        <div class="step-num">5</div>
+                        <h4>Operate</h4>
+                        <p>Auto-restart cron. Health checks. Memory audits. Monthly rotation.</p>
+                    </div>
+                </div>
+
+                <h3>Example Use Cases That Fit This Pattern</h3>
+                <div class="card-grid">
+                    <div class="card">
+                        <span class="icon">📊</span>
+                        <h4>Stock Market Monitoring</h4>
+                        <p>Replace Kalshi API with Alpaca. Same scanner pattern — volume breakouts, VWAP bounces, HOD on
+                            volume. Alert to Discord channels per strategy.</p>
+                    </div>
+                    <div class="card">
+                        <span class="icon">🔐</span>
+                        <h4>Security Event Monitoring</h4>
+                        <p>Ingest SIEM logs. LLM triages alerts by severity and context. Threaded Discord alerts for
+                            each incident. Daily summary of threat landscape.</p>
+                    </div>
+                    <div class="card">
+                        <span class="icon">📰</span>
+                        <h4>Competitive Intelligence</h4>
+                        <p>Monitor competitor websites, patent filings, job postings. LLM identifies strategic signals.
+                            Weekly briefings to your team's Telegram channel.</p>
+                    </div>
+                </div>
+
+                <h3>What to Replicate</h3>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Component</th>
+                                <th>What We Did</th>
+                                <th>What You'd Swap</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Data Source</td>
+                                <td>Kalshi REST + WebSocket API</td>
+                                <td>Your domain API</td>
+                            </tr>
+                            <tr>
+                                <td>Analysis</td>
+                                <td>Rebalancing math + LLM dependency detection</td>
+                                <td>Your domain logic + LLM judgment</td>
+                            </tr>
+                            <tr>
+                                <td>Skills</td>
+                                <td><code>SKILL.md</code> + Python scripts + <code>context.md</code></td>
+                                <td>Same structure, your instructions</td>
+                            </tr>
+                            <tr>
+                                <td>Alert Channels</td>
+                                <td>4 Discord channels (categorized)</td>
+                                <td>Any OpenClaw-supported channel</td>
+                            </tr>
+                            <tr>
+                                <td>Scheduling</td>
+                                <td>5 OpenClaw cron jobs + 1 system cron</td>
+                                <td>Your schedule, same tooling</td>
+                            </tr>
+                            <tr>
+                                <td>Security</td>
+                                <td>Dedicated Mac Mini, localhost, Tailscale</td>
+                                <td><strong>Don't change this part</strong></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="callout callout-tip">
+                    <div class="callout-icon">🚀</div>
+                    <div>
+                        <strong>Getting started.</strong> Clone the skill structure, swap the data source, write your
+                        <code>SKILL.md</code> with agent instructions, fill in <code>context.md</code> with your
+                        parameters, and write atomic scripts for your domain. The OpenClaw framework handles the rest —
+                        scheduling, alerting, memory, health checks, and multi-channel delivery.
+                    </div>
+                </div>
+            </section>
+
+            <div class="sep"></div>
+
+            <!-- ═══════════════════════════════════════════════════════
+     REFERENCES
+     ═══════════════════════════════════════════════════════ -->
+            <section class="reveal" style="padding-bottom:1rem;">
+                <h2>References</h2>
+                <ul style="margin-top:1rem; list-style: none; padding: 0;">
+                    <li style="padding:.4rem 0;">📦 <a href="https://github.com/openclaw/openclaw"
+                            target="_blank">OpenClaw Framework</a> — open-source agent framework</li>
+                    <li style="padding:.4rem 0;">&#127959;&#65039; <a href="https://every.to/guides/agent-native"
+                            target="_blank">Agent-Native Architecture</a> &mdash; design principles for agent-first
+                        applications</li>
+                    <li style="padding:.4rem 0;">&#128274; <a
+                            href="https://claude.ai/public/artifacts/155311d8-60e3-4143-bd90-65af86c1b721"
+                            target="_blank">OpenClaw Setup Guide</a> — security hardening reference (Willison, Cisco,
+                        IBM, Palo Alto Networks)</li>
+                    <li style="padding:.4rem 0;">📄 <a href="https://arxiv.org/abs/2508.03474"
+                            target="_blank">Unravelling the Probabilistic Forest</a> — arbitrage research paper ($40M
+                        extracted)</li>
+                    <li style="padding:.4rem 0;">📘 <a href="https://docs.kalshi.com" target="_blank">Kalshi API
+                            Documentation</a></li>
+                    <li style="padding:.4rem 0;">🧪 <a href="https://demo-api.kalshi.co" target="_blank">Kalshi Demo
+                            Environment</a></li>
+                </ul>
+            </section>
+
+        </div><!-- .wrapper -->
+    </main>
+
+    <footer>
+        <div class="wrapper">
+            <p>Kalshi Arbitrage on OpenClaw — Implementation Reference</p>
+            <p style="margin-top:.3rem;">Internal document. Not for public distribution.</p>
+        </div>
+    </footer>
+
+    <!-- ── Scroll reveal animation ─────────────────────────── -->
+    <script>
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
+                }
+            });
+        }, { threshold: 0.08, rootMargin: '0px 0px -40px 0px' });
+
+        document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+        // ── Mobile: add data-label attributes to table cells ──
+        document.querySelectorAll('table').forEach(table => {
+            const headers = Array.from(table.querySelectorAll('th')).map(th => th.textContent.trim());
+            table.querySelectorAll('tbody tr').forEach(tr => {
+                tr.querySelectorAll('td').forEach((td, i) => {
+                    if (headers[i]) td.setAttribute('data-label', headers[i]);
+                });
+            });
+        });
+
+        // ── Scroll-spy: highlight active nav link ──
+        (() => {
+            const bar = document.getElementById('toc-bar');
+            const links = bar.querySelectorAll('a[href^="#"]');
+            const sections = Array.from(links).map(a => {
+                const id = a.getAttribute('href').slice(1);
+                return { id, el: document.getElementById(id), link: a };
+            }).filter(s => s.el);
+
+            function update() {
+                // add shadow when scrolled past hero
+                bar.classList.toggle('scrolled', window.scrollY > 80);
+
+                // find current section
+                let current = sections[0];
+                const offset = window.scrollY + 80;
+                for (const s of sections) {
+                    if (s.el.offsetTop <= offset) current = s;
+                }
+                links.forEach(a => a.classList.remove('active'));
+                if (current) current.link.classList.add('active');
+            }
+
+            window.addEventListener('scroll', update, { passive: true });
+            update();
+        })();
+    </script>
+
+</body>
+
+</html>

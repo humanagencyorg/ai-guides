@@ -3,8 +3,8 @@ title: "AI GUIDES"
 description: "No bullshit guides for AI tools"
 author: "Human Agency"
 email: "ai@human.org"
-baseurl: "" 
-url: "https://ai.human.org"
+baseurl: "/ai-guides" 
+url: "https://madecero.github.io"
 
 # Build settings
 markdown: kramdown
